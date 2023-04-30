@@ -1,5 +1,7 @@
 package com.example.composepractice
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -10,38 +12,33 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusRequester.Companion.createRefs
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.core.content.ContextCompat.startActivity
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.composepractice.ui.theme.ComposePracticeTheme
 import com.example.composepractice.ui.theme.Purple700
-import com.example.composepractice.ui.theme.Teal200
+import kotlinx.coroutines.*
 
 //https://metanit.com/kotlin/jetpack/1.3.php
 
@@ -54,20 +51,85 @@ class MainActivity : ComponentActivity() {
 //                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
 //                    Greeting("Android")
 //                }
-                setLazyColumn()
+                setFocusTextField()
             }
         }
     }
 }
 
+
+
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     ComposePracticeTheme {
-        setLazyColumn()
+        setFocusTextField()
 //        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colors.background) {
 //            Greeting("Android")
 //        }
+    }
+}
+
+//When app start request focus on textfield immediately
+//https://www.youtube.com/watch?v=cXIN99PRgsc
+@Composable
+fun setFocusTextField() {
+    val focusRequester = remember { FocusRequester() }
+    var value by remember { mutableStateOf("") }
+    LaunchedEffect(key1 = Unit) {
+        focusRequester.requestFocus()
+    }
+
+    TextField(value = value,
+        onValueChange = {value = it},
+        modifier = Modifier.focusRequester(focusRequester)
+    )
+}
+
+@Composable
+fun setSpacer() {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("http://www.google.com"))
+    val context = LocalContext.current
+    Column {
+        Text("Hello")
+        Spacer(modifier = Modifier.size(30.dp))
+        Text(text = "World", modifier = Modifier
+            .clickable { startActivity(context, intent, null) })
+    }
+}
+
+
+@Composable
+fun ConstraintLayoutDemo() {
+    ConstraintLayout(modifier = Modifier.size(200.dp)) {
+        val (redBox, blueBox, yellowBox, text) = createRefs()
+
+        Box(modifier = Modifier
+            .size(50.dp)
+            .background(Color.Red)
+            .constrainAs(redBox) {})
+
+        Box(modifier = Modifier
+            .size(50.dp)
+            .background(Color.Blue)
+            .constrainAs(blueBox) {
+                top.linkTo(redBox.bottom)
+                start.linkTo(redBox.end)
+            })
+
+        Box(modifier = Modifier
+            .size(50.dp)
+            .background(Color.Yellow)
+            .constrainAs(yellowBox) {
+                bottom.linkTo(blueBox.bottom)
+                start.linkTo(blueBox.end, 20.dp)
+            })
+
+        Text("Hello World", modifier = Modifier.constrainAs(text) {
+            top.linkTo(parent.top)
+            start.linkTo(yellowBox.start)
+        })
+
     }
 }
 
@@ -129,14 +191,18 @@ fun setLazyRow() {
     }
 }
 
+//https://habr.com/ru/companies/skyeng/articles/654049/
+//https://blog.devgenius.io/navigating-lists-in-jetpack-compose-with-lazyliststate-b416d7448014
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun setLazyVerticalGrid() {
-    val list = (1..10).map { it.toString() }
-
+    val list = (1..150).map { it.toString() }
+    val state = rememberLazyGridState(initialFirstVisibleItemIndex = 85)
+    val coroutineScope = rememberCoroutineScope()
     LazyVerticalGrid(
         columns = GridCells.Adaptive(128.dp),
 //        columns = GridCells.Fixed(2),
-
+        state = state,
         // content padding
         contentPadding = PaddingValues(
             start = 12.dp,
@@ -152,6 +218,21 @@ fun setLazyVerticalGrid() {
                         .padding(4.dp)
                         .fillMaxWidth(),
                     elevation = 8.dp,
+                    onClick = {
+                        Log.i("mLog", "${index + 1}")
+                        if (index + 1 > 100) {
+                            scope.launch {
+                                // We need delay to wait keyboard show that triggers rebuild our ui.
+                                delay(300)
+                                state.scrollToItem(0)
+                            }
+                        } else {
+                            coroutineScope.launch {
+                                delay(300)
+                                state.animateScrollToItem(100)
+                            }
+                        }
+                    }
                 ) {
                     Text(
                         text = list[index],
@@ -166,15 +247,18 @@ fun setLazyVerticalGrid() {
         }
     )
 }
-
+private val scope = CoroutineScope(Job() + Dispatchers.Main)
 
 @Composable
 fun setImage() {
     Column {
-//        AsyncImage(
-//            model = "https://avatars.githubusercontent.com/u/52722434?s=200&v=4",
-//            contentDescription = null
-//        )
+        AsyncImage(
+            placeholder = painterResource(R.drawable.image),
+            model = "https://avatars.githubusercontent.com/u/52722434?s=200&v=4",
+            contentDescription = null,
+            modifier = Modifier
+                .size(128.dp)
+        )
         Image(
             bitmap = ImageBitmap.imageResource(R.drawable.image),
             contentDescription = null
